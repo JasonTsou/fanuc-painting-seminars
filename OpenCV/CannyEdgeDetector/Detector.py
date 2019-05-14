@@ -25,6 +25,14 @@ args = ap.parse_args()
 
 image = cv2.imread(args.image_path)
 if image is not None:
+    # доска 118*88 см
+    board_width = 1080
+    board_height = 830
+    width = image.shape[1]
+    height = image.shape[0]
+    if width > board_width:
+        width_percent = int(width * (width / board_width))
+
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
     auto = auto_canny(blurred)
@@ -32,13 +40,13 @@ if image is not None:
     coordinates = set(zip(indices[1], indices[0]))
     length = len(coordinates)
     print(length)
-    edges = []
+    edges = [[]]
     i = coordinates.pop()
     coordinates.add(i)
     k = 0
     while k < length:  # k - счетчик, который проверяет все ли белые точки были отнесены к какой-либо грани
         if i in coordinates:
-            edges.append(i)     # добовляем в edges точку и убираем ее из coordinates
+            edges[len(edges) - 1].append(i)     # добовляем в edges точку и убираем ее из coordinates
             coordinates.remove(i)
             k += 1
             for t in range(-1, 2):  # проверяем все точки вокруг i
@@ -47,21 +55,18 @@ if image is not None:
                         i = (i[0] + t, i[1] + u)
                         break
         else:
-            edges.append((-1, -1))  # если новых белых точек вокруг i не нашлось, то отмечаем конец кривой как (-1,-1)
+            edges.append([])  # если новых белых точек вокруг i не нашлось, то отмечаем конец кривой как (-1,-1)
             i = coordinates.pop()
-            edges.append(i)
+            edges[len(edges) - 1].append(i)
             k += 1
             for t in range(-1, 2):
                 for u in range(-1, 2):
                     if ((t != 0) or (u != 0)) and ((i[0] + t, i[1] + u) in coordinates):
                         i = (i[0] + t, i[1] + u)
                         break
-    # for i in edges:
-    #     if i != (-1, -1):
-    #         print(i)
-    #     else:
-    #         print('\n\n')
     cv2.imwrite("C:\\auto.png", auto)
+    for i in edges:
+        print(i)
     print(time.time() - start)
 else:
     print('Incorrect path(only ASCII symbols)')
