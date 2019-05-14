@@ -1,5 +1,5 @@
 import socket
-import cv2
+from  matplotlib.pyplot import imsave
 import numpy as np
 
 sock = socket.socket()
@@ -9,10 +9,10 @@ conn, addr = sock.accept()
 print('connected:', addr)
 
 # Создаем картинку полностью белого цвета
-img = np.array((2048,2048,3))
+img = np.zeros((1500,1500,3), dtype=float)
 
 while True:
-    data = conn.recv(1024)
+    data = conn.recv(8000)
     if not data or data.decode() == '-1 -1 -1':
         break
     # Получаем от клиента коордиаты пикселя
@@ -22,11 +22,13 @@ while True:
     z = int(coordinates[2])
     print([x ,y, z])
     #Красим пиксель в черный цвет
-    img[x][y] = [255, 255, 255]
+    for i in range(img.shape[2]):
+        img[y][x][i] = 1.
 
-# #Сораняем картинку
-print(img[50][52])
-# cv2.imwrite('C:\\Users\\Alexander\\PycharmProjects\\Robot\\Server\\test.png',img)
-# # Закрываем соединение
-# conn.close()
+#Сораняем картинку
+
+
+imsave('test',img)
+# Закрываем соединение
+conn.close()
 
