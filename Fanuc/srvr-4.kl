@@ -1,0 +1,245 @@
+PROGRAM srvr4
+
+%STACKSIZE = 13000 
+%NOPAUSE=ERROR+COMMAND+TPENABLE 
+%ENVIRONMENT sysdef --system value  
+%ENVIRONMENT flbt    --port
+%ENVIRONMENT STRNG 
+%ENVIRONMENT MOTN 
+
+--------------------------------------------------------------
+VAR
+
+    file_var : FILE         -- 'connection' with client
+
+	x : INTEGER
+	y : INTEGER
+	z : INTEGER
+	w : INTEGER
+	p : INTEGER
+	r : INTEGER
+	spd: INTEGER
+
+    STATUS : INTEGER
+    flag : INTEGER
+    n_byte : INTEGER
+    ctrl : INTEGER
+    move_now : BOOLEAN
+
+	point_w : XYZWPR
+
+--------------------------------------------------------------
+--Setting the origin
+ROUTINE reset_tool_ 
+VAR
+
+	crtpos_: XYZWPREXT
+	crtposuser : XYZWPREXT
+
+BEGIN
+
+	crtpos_.x = 0
+	crtpos_.y = 0
+	crtpos_.z = 0
+	crtpos_.w = 0
+	crtpos_.p = 0
+	crtpos_.r = 0
+	crtposuser.x = 808.6
+	crtposuser.y = -419.4
+	crtposuser.z = 721.7
+	crtposuser.w = -9.0
+	crtposuser.p = 0
+	crtposuser.r = 0
+	
+	$UTOOL = crtpos_
+	$UFRAME = crtposuser
+
+END reset_tool_
+
+--------------------------------------------------------------
+--Socket connection to the robot
+ROUTINE connect_sock 
+VAR 
+
+	entry : INTEGER
+	port_number : INTEGER
+
+BEGIN
+
+	port_number = 59002
+	SET_VAR(entry, '*SYSTEM*', '$HOSTS_CFG[3].$SERVER_PORT', port_number, STATUS)
+	MSG_DISCO('S3:', STATUS)
+	MSG_CONNECT('S3:', STATUS)
+
+END connect_sock
+
+--------------------------------------------------------------
+--Sets the standard robot settings
+ROUTINE set_def_sets
+BEGIN
+
+	reset_tool_ 
+
+	--Initializing variables
+	point_w = CURPOS(0,0)
+	
+	$MCR.$GENOVERRIDE = 100     -- Speed in percent
+	$DMAURST = TRUE             -- Robot operation after error
+	$SPEED = 10
+	$TERMTYPE = NODECEL         -- Approximation of 3 points
+	$JCR_GRP[1].$JOG_COORD = 4  -- Coordinate system - UserFrame
+	$MOTYPE = LINEAR            -- Type of motion
+
+	ctrl = 0
+	spd=60
+
+END set_def_sets
+
+--------------------------------------------------------------
+ROUTINE stop_robot
+BEGIN
+
+	CNCL_STP_MTN
+	CANCEL GROUP[1]
+
+END stop_robot	
+
+--------------------------------------------------------------
+--Write to coordinates of the robot in world
+ROUTINE s_cur_world 
+VAR
+
+	cur: XYZWPR
+	str : ARRAY [6] OF STRING[10]
+	send_str : STRING[60]
+
+BEGIN
+
+	cur = CURPOS(0,0) --Coordinates of the robot in world
+
+	CNV_REAL_STR(cur.x, 1, 3, str[1])   --CNV_REAL_STR(source, length, num_digits, target)
+	CNV_REAL_STR(cur.y, 1, 3, str[2])
+	CNV_REAL_STR(cur.z, 1, 3, str[3])
+	CNV_REAL_STR(cur.w, 1, 3, str[4])
+	CNV_REAL_STR(cur.p, 1, 3, str[5])
+	CNV_REAL_STR(cur.r, 1, 3, str[6])	
+
+	send_str = str[1] + str[2] + str[3] + str[4] + str[5] + str[6]
+	WRITE file_var(send_str)
+
+END s_cur_world
+
+--------------------------------------------------------------
+--Reads and processes the package "point"
+ROUTINE point_input
+VAR
+    ctrl_in : INTEGER       --ctrl_in = 1 => bad!
+BEGIN
+
+    STATUS = SET_PORT_ATR(PORT_3, ATR_READAHD, 2)
+
+	READ file_var (x)				
+	READ file_var (y)
+	READ file_var (z)
+	READ file_var(spd)
+	READ file_var (ctrl_in::1)
+	
+	STATUS = SET_PORT_ATR(PORT_3, ATR_IA, 2)
+
+	IF  ((UNINIT(x)) OR (UNINIT(y)) OR (UNINIT(z)) OR (UNINIT(ctrl_in)) OR (UNINIT(spd))) THEN
+
+        ctrl_in = 1
+		ctrl = 1
+    
+    ELSE
+
+        point_w.x = x
+        point_W.y = y
+        point_w.z = z
+        point_w.w = 180
+        point_w.p = 0
+        point_w.r = 0
+        IF ((spd>0) AND (spd<200)) THEN
+       	 $SPEED = spd
+        ENDIF
+
+        CHECK_EPOS(point_w, $UFRAME, $UTOOL, STATUS)
+        
+    ENDIF
+
+END point_input
+
+--------------------------------------------------------------
+--moving
+ROUTINE moving_to
+VAR
+	ctrl_in : INTEGER
+    flag : INTEGER
+
+BEGIN
+
+	ctrl_in = 0
+
+    REPEAT
+        READ file_var(flag)
+        IF ( NOT UNINIT(flag)) THEN
+
+            IF (flag = 1) THEN
+
+                point_input
+                ctrl_in = ctrl
+                MOVE TO point_w 
+                WRITE file_var ('1')
+
+            ENDIF
+            
+            IF (flag = 2) THEN
+
+				READ file_var (ctrl_in::1)
+
+				IF (UNINIT(ctrl_in)) THEN
+					ctrl_in = 1
+					ctrl = 1
+				ELSE
+					s_cur_world
+					ctrl=ctrl_in
+				ENDIF
+			ENDIF
+        ELSE
+
+            ctrl_in = 1
+            ctrl = 1
+			
+        ENDIF
+        
+    UNTIL (ctrl_in = 1)
+
+END moving_to
+
+--------------------------------------------------------------
+BEGIN
+
+    set_def_sets
+
+	REPEAT
+		connect_sock
+
+		IF STATUS = 0 THEN
+
+			OPEN FILE file_var ('RW', 'S3:') 
+			STATUS = IO_STATUS(file_var)
+
+		ENDIF
+
+		IF STATUS = 0 THEN 	
+			
+			moving_to
+		
+			CANCEL FILE file_var
+			CLOSE FILE file_var
+			MSG_DISCO('S3:', STATUS)
+
+		ENDIF
+	UNTIL TRUE
+
+END srvr4
