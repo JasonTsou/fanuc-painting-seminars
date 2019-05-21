@@ -62,10 +62,12 @@ ROUTINE connect_sock
 VAR 
 
 	entry : INTEGER
+	port_number : INTEGER
 
 BEGIN
 
-	SET_VAR(entry, '*SYSTEM*', '$HOSTS_CFG[3].$SERVER_PORT', 59002, STATUS)
+	port_number = 59002
+	SET_VAR(entry, '*SYSTEM*', '$HOSTS_CFG[3].$SERVER_PORT', port_number, STATUS)
 	MSG_DISCO('S3:', STATUS)
 	MSG_CONNECT('S3:', STATUS)
 
@@ -115,7 +117,7 @@ BEGIN
 
 	cur = CURPOS(0,0) --Coordinates of the robot in world
 
-	CNV_REAL_STR(cur.x, 1, 3, str[1])
+	CNV_REAL_STR(cur.x, 1, 3, str[1])   --CNV_REAL_STR(source, length, num_digits, target)
 	CNV_REAL_STR(cur.y, 1, 3, str[2])
 	CNV_REAL_STR(cur.z, 1, 3, str[3])
 	CNV_REAL_STR(cur.w, 1, 3, str[4])
