@@ -15,7 +15,8 @@ def ardClient():
         # if line:
         #    print(line.decode().strip())
 
+    ser.close()
     return line.decode().strip()
 
-    ser.close()
+    
 
